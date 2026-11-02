@@ -157,7 +157,13 @@
   // ======================================================================
   // Persistence helpers
   // ======================================================================
-  function saveSettings() { Store.put('settings', 'main', JSON.parse(JSON.stringify(state.settings))); }
+  const BUILD = 'b5';
+  function saveSettings() {
+    state.settings.updatedAt = Date.now();
+    const copy = JSON.parse(JSON.stringify(state.settings));
+    lsSet('sb.settings', JSON.stringify(copy));
+    Store.put('settings', 'main', copy);
+  }
   function writeCycle(key, patch) {
     const merged = { ...(state.cycles[key] || {}), ...patch };
     delete merged.id;
@@ -823,6 +829,7 @@ Biggest items this month: ${top}.`;
 
     return `<div class="settings">
       <h2>Settings</h2>
+      <div class="hint" style="margin-bottom:8px">Build ${BUILD} · storage: ${Store.mode === 'cloud' ? 'cloud sync (' + esc(Store.email || '') + ')' : 'this phone only'}</div>
       <button class="btn primary" data-act="s-save" style="width:100%;margin-bottom:12px">Save settings</button>
 
       <div class="s-card">
@@ -1117,8 +1124,17 @@ Biggest items this month: ${top}.`;
   // ======================================================================
   function mergeSettings(row) {
     const base = { startDay: 27, categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })), apiKey: lsGet('sb.apikey') || '' };
-    if (!row) return base;
+    if (!row) {
+      try { const m = JSON.parse(lsGet('sb.settings') || 'null'); if (m && m.categories) return { ...base, ...m, apiKey: m.apiKey || base.apiKey }; } catch (e) { /* ignore */ }
+      return base;
+    }
+    // Prefer the phone's own mirror when it is newer than what the store handed back.
+    try {
+      const m = JSON.parse(lsGet('sb.settings') || 'null');
+      if (m && m.categories && (m.updatedAt || 0) > (row.updatedAt || 0)) return { ...base, ...m, apiKey: m.apiKey || row.apiKey || base.apiKey };
+    } catch (e) { /* ignore */ }
     return {
+      updatedAt: row.updatedAt || 0,
       startDay: row.startDay || 27,
       categories: Array.isArray(row.categories) && row.categories.length ? row.categories : base.categories,
       apiKey: row.apiKey || lsGet('sb.apikey') || '',
@@ -1126,6 +1142,7 @@ Biggest items this month: ${top}.`;
   }
 
   async function boot() {
+    state.settings = mergeSettings(null);
     Store.onError = (e) => toast('Sync problem: ' + ((e && e.message) || 'unknown'));
     await Store.init();
     if (Store.syncError && Store.hasConfig) {
