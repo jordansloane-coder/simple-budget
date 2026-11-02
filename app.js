@@ -1072,19 +1072,31 @@ Biggest items this month: ${top}.`;
     else if (set === 'catName') { if (e.target.value.trim()) { cat.name = e.target.value.trim(); saveSettings(); toast('Saved'); } }
     else if (set === 'lineItems') { cat.lineItems = e.target.checked; saveSettings(); toast('Saved'); }
     else if (set === 'device') { state.deviceName = e.target.value.trim(); lsSet('sb.name', state.deviceName); toast('Saved'); }
-    else if (set === 'apiKey') { s.apiKey = e.target.value.trim(); saveSettings(); toast('Saved'); }
+    else if (set === 'apiKey') { saveApiKey(e.target.value); toast('Saved'); }
+  });
+
+  // The key is saved on every keystroke/paste (not just on blur) and mirrored in localStorage, so a
+  // re-render or a synced settings update can never wipe it.
+  function saveApiKey(v) {
+    const k = (v || '').trim();
+    state.settings.apiKey = k;
+    lsSet('sb.apikey', k);
+    saveSettings();
+  }
+  document.addEventListener('input', (e) => {
+    if (e.target.dataset && e.target.dataset.set === 'apiKey') saveApiKey(e.target.value);
   });
 
   // ======================================================================
   // Boot
   // ======================================================================
   function mergeSettings(row) {
-    const base = { startDay: 27, categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })), apiKey: '' };
+    const base = { startDay: 27, categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })), apiKey: lsGet('sb.apikey') || '' };
     if (!row) return base;
     return {
       startDay: row.startDay || 27,
       categories: Array.isArray(row.categories) && row.categories.length ? row.categories : base.categories,
-      apiKey: row.apiKey || '',
+      apiKey: row.apiKey || lsGet('sb.apikey') || '',
     };
   }
 
