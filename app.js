@@ -823,6 +823,7 @@ Biggest items this month: ${top}.`;
 
     return `<div class="settings">
       <h2>Settings</h2>
+      <button class="btn primary" data-act="s-save" style="width:100%;margin-bottom:12px">Save settings</button>
 
       <div class="s-card">
         <h4>Month</h4>
@@ -873,6 +874,13 @@ Biggest items this month: ${top}.`;
 
   async function handleSettingsAction(act, t) {
     const s = state.settings;
+    if (act === 's-save') {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      flushSettings(true);
+      saveSettings();
+      toast('Saved ✓ — stays after you close the app');
+      return;
+    }
     if (act === 's-addcat') {
       const name = $('#ncName').value.trim();
       if (!name) { toast('Give the category a name'); return; }
@@ -1062,18 +1070,36 @@ Biggest items this month: ${top}.`;
     if (f && cb) cb(f);
   });
 
-  document.addEventListener('change', (e) => {
-    const set = e.target.dataset && e.target.dataset.set;
+  // Apply one settings field to state and persist it. Used on input (every keystroke/paste), change,
+  // the Save button, and when the app is backgrounded, so nothing depends on tapping out of a field.
+  function applyField(el, quiet) {
+    const set = el.dataset && el.dataset.set;
     if (!set) return;
     const s = state.settings;
-    const cat = e.target.dataset.cat ? catById(e.target.dataset.cat) : null;
-    if (set === 'startDay') { s.startDay = Number(e.target.value); state.idx = null; state.viewKey = null; saveSettings(); toast('Month now starts on the ' + e.target.value); }
-    else if (set === 'cap') { changeCap(cat, Math.max(0, parseFloat(e.target.value) || 0)); toast('Cap saved'); }
-    else if (set === 'catName') { if (e.target.value.trim()) { cat.name = e.target.value.trim(); saveSettings(); toast('Saved'); } }
-    else if (set === 'lineItems') { cat.lineItems = e.target.checked; saveSettings(); toast('Saved'); }
-    else if (set === 'device') { state.deviceName = e.target.value.trim(); lsSet('sb.name', state.deviceName); toast('Saved'); }
-    else if (set === 'apiKey') { saveApiKey(e.target.value); toast('Saved'); }
+    const cat = el.dataset.cat ? catById(el.dataset.cat) : null;
+    const say = (m) => { if (!quiet) toast(m); };
+    if (set === 'startDay') {
+      const d = Number(el.value);
+      if (d !== s.startDay) { s.startDay = d; state.idx = null; state.viewKey = null; saveSettings(); say('Month now starts on the ' + el.value); }
+    }
+    else if (set === 'cap') {
+      const v = Math.max(0, parseFloat(el.value) || 0);
+      if (cat && v !== (cat.cap || 0)) { changeCap(cat, v); say('Cap saved'); }
+    }
+    else if (set === 'catName') { if (cat && el.value.trim() && el.value.trim() !== cat.name) { cat.name = el.value.trim(); saveSettings(); say('Saved'); } }
+    else if (set === 'lineItems') { cat.lineItems = el.checked; saveSettings(); say('Saved'); }
+    else if (set === 'device') { state.deviceName = el.value.trim(); lsSet('sb.name', state.deviceName); say('Saved'); }
+    else if (set === 'apiKey') { saveApiKey(el.value); say('Saved'); }
+  }
+  function flushSettings(quiet) { document.querySelectorAll('#view [data-set]').forEach((el) => applyField(el, quiet)); }
+
+  document.addEventListener('change', (e) => applyField(e.target, false));
+  document.addEventListener('input', (e) => {
+    const k = e.target.dataset && e.target.dataset.set;
+    if (k === 'apiKey' || k === 'cap' || k === 'catName' || k === 'device') applyField(e.target, true);
   });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSettings(true); });
+  window.addEventListener('pagehide', () => flushSettings(true));
 
   // The key is saved on every keystroke/paste (not just on blur) and mirrored in localStorage, so a
   // re-render or a synced settings update can never wipe it.
@@ -1085,9 +1111,6 @@ Biggest items this month: ${top}.`;
     const st = document.getElementById('keyStatus');
     if (st) st.textContent = k ? '✓ Key saved on this phone (ends in ' + k.slice(-4) + ')' : 'No key saved yet';
   }
-  document.addEventListener('input', (e) => {
-    if (e.target.dataset && e.target.dataset.set === 'apiKey') saveApiKey(e.target.value);
-  });
 
   // ======================================================================
   // Boot
@@ -1123,5 +1146,6 @@ Biggest items this month: ${top}.`;
     initGoogle();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
   }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
   boot();
 })();
