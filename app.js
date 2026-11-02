@@ -157,11 +157,12 @@
   // ======================================================================
   // Persistence helpers
   // ======================================================================
-  const BUILD = 'b5';
+  const BUILD = 'b6';
   function saveSettings() {
     state.settings.updatedAt = Date.now();
     const copy = JSON.parse(JSON.stringify(state.settings));
     lsSet('sb.settings', JSON.stringify(copy));
+    lsSet('sb.lastSaveAt', String(Date.now()));
     Store.put('settings', 'main', copy);
   }
   function writeCycle(key, patch) {
@@ -829,7 +830,7 @@ Biggest items this month: ${top}.`;
 
     return `<div class="settings">
       <h2>Settings</h2>
-      <div class="hint" style="margin-bottom:8px">Build ${BUILD} · storage: ${Store.mode === 'cloud' ? 'cloud sync (' + esc(Store.email || '') + ')' : 'this phone only'}</div>
+      <div class="hint" style="margin-bottom:8px">Build ${BUILD} · storage: ${Store.mode === 'cloud' ? 'cloud sync (' + esc(Store.email || '') + ')' : 'this phone only'}<br>Launch #${state.diag ? state.diag.launches : '?'} · at launch: ${state.diag && state.diag.foundMirror ? 'found saved settings' : 'NOTHING saved found'}${state.diag && state.diag.savedAt ? ' (last saved ' + new Date(state.diag.savedAt).toLocaleString() + ')' : ''}</div>
       <button class="btn primary" data-act="s-save" style="width:100%;margin-bottom:12px">Save settings</button>
 
       <div class="s-card">
@@ -1142,6 +1143,15 @@ Biggest items this month: ${top}.`;
   }
 
   async function boot() {
+    // Launch diagnostics: shows in Settings whether this phone kept its data between launches.
+    const prevLaunches = Number(lsGet('sb.launches', '0')) || 0;
+    state.diag = {
+      launches: prevLaunches + 1,
+      foundMirror: !!lsGet('sb.settings'),
+      foundKey: !!lsGet('sb.apikey'),
+      savedAt: Number(lsGet('sb.lastSaveAt', '0')) || 0,
+    };
+    lsSet('sb.launches', String(prevLaunches + 1));
     state.settings = mergeSettings(null);
     Store.onError = (e) => toast('Sync problem: ' + ((e && e.message) || 'unknown'));
     await Store.init();
