@@ -848,7 +848,7 @@ Biggest items this month: ${top}.`;
       <div class="s-card">
         <h4>This phone</h4>
         <div><label class="field-label">Your name (shown on receipts you add)</label><input data-set="device" value="${esc(state.deviceName)}" placeholder="e.g. Jordan"></div>
-        <div><label class="field-label">Claude API key</label><input data-set="apiKey" type="password" autocomplete="off" value="${esc(s.apiKey)}" placeholder="sk-ant-…"><div class="hint" style="margin-top:6px">Reads your receipts (from console.anthropic.com). With sync on, the key is shared so your wife doesn't need to enter it.</div></div>
+        <div><label class="field-label">Claude API key</label><input data-set="apiKey" type="text" class="secret" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" name="claude-key-${Date.now()}" value="${esc(s.apiKey)}" placeholder="sk-ant-…"><div class="hint" id="keyStatus" style="margin-top:6px">${s.apiKey ? '✓ Key saved on this phone (ends in ' + esc(s.apiKey.slice(-4)) + ')' : 'No key saved yet'}</div><div class="hint" style="margin-top:6px">Reads your receipts (from console.anthropic.com). With sync on, the key is shared so your wife doesn't need to enter it.</div></div>
       </div>
 
       <div class="s-card"><h4>Share with your wife</h4>${syncBody}</div>
@@ -1082,6 +1082,8 @@ Biggest items this month: ${top}.`;
     state.settings.apiKey = k;
     lsSet('sb.apikey', k);
     saveSettings();
+    const st = document.getElementById('keyStatus');
+    if (st) st.textContent = k ? '✓ Key saved on this phone (ends in ' + k.slice(-4) + ')' : 'No key saved yet';
   }
   document.addEventListener('input', (e) => {
     if (e.target.dataset && e.target.dataset.set === 'apiKey') saveApiKey(e.target.value);

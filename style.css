@@ -281,3 +281,5 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   #printRoot .pr img { display: block; max-width: 100%; max-height: 6.5in; margin-top: 8px; }
   #printRoot .pr table { margin-top: 6px; font-size: 12px; }
 }
+
+.secret { -webkit-text-security: disc; }
