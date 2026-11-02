@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0e1512">
+<title>Simple Budget</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Simple Budget">
+<link rel="stylesheet" href="style.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<div id="app">
+  <div id="banner" class="banner" style="display:none;"></div>
+  <main id="view"></main>
+  <nav id="tabbar" class="tabbar"></nav>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast" class="toast"></div>
+<div id="printRoot"></div>
+<input type="file" id="photoInput" accept="image/*" hidden>
+
+<script src="store.js"></script>
+<script src="claude.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
