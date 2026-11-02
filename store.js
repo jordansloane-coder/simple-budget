@@ -7,6 +7,16 @@
 
 const Store = (() => {
   const LS_CFG = 'sb.fbconfig';
+  // Firebase web config for this household's project. Not a secret — access is enforced by the
+  // Firestore security rules (one shared login), not by hiding this.
+  const BUILTIN_CFG = {
+    apiKey: 'AIzaSyBnr7HainkVlMbIQbrl0QX7K06IzIEg3Q8',
+    authDomain: 'simple-budget-7a5b9.firebaseapp.com',
+    projectId: 'simple-budget-7a5b9',
+    storageBucket: 'simple-budget-7a5b9.firebasestorage.app',
+    messagingSenderId: '638276880029',
+    appId: '1:638276880029:web:2bcd2397d40e978a533674',
+  };
   const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
 
   let mode = 'local';
@@ -100,25 +110,6 @@ const Store = (() => {
     return (e && e.message) || 'Sign-in failed.';
   }
 
-  // Accepts a setup code ("SB1:..."), a JSON object, or the JS snippet Firebase shows.
-  function parseConfigInput(text) {
-    const t = (text || '').trim();
-    let cfg = null;
-    if (t.startsWith('SB1:')) {
-      try { cfg = JSON.parse(atob(t.slice(4))); } catch (e) { /* fall through */ }
-    } else {
-      try { cfg = JSON.parse(t); } catch (e) { /* not JSON */ }
-      if (!cfg) {
-        cfg = {};
-        const re = /([A-Za-z]+)\s*:\s*["']([^"']+)["']/g;
-        let m;
-        while ((m = re.exec(t))) cfg[m[1]] = m[2];
-      }
-    }
-    if (!cfg || !cfg.apiKey || !cfg.projectId) throw new Error('That doesn\'t look like a Firebase config — it needs at least apiKey and projectId.');
-    return cfg;
-  }
-
   return {
     get mode() { return mode; },
     get email() { return email; },
@@ -174,9 +165,8 @@ const Store = (() => {
     },
 
     // ----- sync setup -----
-    parseConfigInput,
-
-    async connect(cfg, em, pw, create) {
+    async connect(em, pw, create) {
+      const cfg = BUILTIN_CFG;
       await loadFirebase(cfg);
       let cred;
       try {
@@ -210,11 +200,6 @@ const Store = (() => {
     async signOut() {
       try { if (auth) await auth.signOut(); } catch (e) { /* ignore */ }
       localStorage.removeItem(LS_CFG);
-    },
-
-    setupCode() {
-      const cfg = readCfg();
-      return cfg ? 'SB1:' + btoa(JSON.stringify(cfg)) : '';
     },
   };
 })();

@@ -23,19 +23,14 @@ service cloud.firestore {
 }
 ```
 
-## 3. Get the config
-1. Project home → click the **`</>` (Web)** icon → nickname `simple-budget` → **Register app**.
-2. Copy the block that looks like `const firebaseConfig = { apiKey: "...", authDomain: "...", ... }`.
-
-## 4. Connect your phone
+## 3. Connect your phone
+The Firebase config is already built into the app, so there's nothing to copy or paste.
 1. Open Simple Budget → **Settings → Share with your wife → Set up sync**.
-2. Paste the config block, then enter a **household email and password** (any email; you'll both use
-   the same one — it just has to be an address you can remember) → **Create household**.
+2. Enter a **household email and password** (any email; you'll both use the same one) → **Create household**.
 3. If receipts are already on the phone it asks whether to upload them — say yes.
 
-## 5. Connect your wife's phone
-1. On your phone: **Settings → Copy setup code for the other phone**, and text it to her.
-2. On her phone: open the app → **Settings → Set up sync** → paste the code, enter the **same**
-   email and password → **Sign in**.
+## 4. Connect your wife's phone
+1. Open the app → **Settings → Set up sync**.
+2. Enter the **same** email and password → **Sign in** (not Create).
 
 Your Claude API key is stored in the shared settings, so she doesn't need to enter it.

@@ -750,17 +750,15 @@ Biggest items this month: ${top}.`;
 
     const syncBody = Store.mode === 'cloud'
       ? `<div class="hint">✅ Syncing as <b>${esc(Store.email)}</b>. Anything either of you adds shows up on both phones.</div>
-         <button class="btn" data-act="s-sync-code">Copy setup code for the other phone</button>
          <button class="btn danger" data-act="s-sync-out">Turn off sync on this phone</button>`
-      : `<div class="hint">Sync is off — receipts live only on this phone. Turn it on so you and your wife share one budget. (One-time Firebase setup: see SETUP-SYNC.md.)</div>
+      : `<div class="hint">Sync is off — receipts live only on this phone. Turn it on so you and your wife share one budget.</div>
          ${Store.syncError ? `<div class="status warn">${esc(Store.syncError)}</div>` : ''}
          <button class="btn" data-act="s-sync-show">${syncFormOpen ? 'Hide' : 'Set up sync'}</button>
          ${syncFormOpen ? `
-           <textarea id="syncCfg" placeholder="Paste the setup code, or the Firebase config"></textarea>
            <input id="syncEmail" type="email" autocapitalize="off" placeholder="Household email (you both use the same one)">
            <input id="syncPass" type="password" placeholder="Household password">
            <div class="row-2"><button class="btn primary" data-act="s-sync-create">Create household</button><button class="btn" data-act="s-sync-in">Sign in</button></div>
-           <div class="hint"><b>First phone:</b> Create household. <b>Second phone:</b> paste the same setup code and Sign in.</div>` : ''}`;
+           <div class="hint"><b>First phone:</b> Create household. <b>Second phone:</b> Sign in with the same email and password.</div>` : ''}`;
 
     const connected = googleOn();
     const lastBackup = lsGet('sb.lastBackup');
@@ -835,9 +833,6 @@ Biggest items this month: ${top}.`;
       syncFormOpen = !syncFormOpen; render(true);
     } else if (act === 's-sync-create' || act === 's-sync-in') {
       await connectSync(act === 's-sync-create');
-    } else if (act === 's-sync-code') {
-      const code = Store.setupCode();
-      try { await navigator.clipboard.writeText(code); toast('Setup code copied'); } catch (e) { prompt('Copy this setup code:', code); }
     } else if (act === 's-sync-out') {
       if (!confirm('Turn off sync on this phone? The shared data stays in the cloud; this phone goes back to local-only.')) return;
       await Store.signOut(); location.reload();
@@ -859,11 +854,10 @@ Biggest items this month: ${top}.`;
 
   async function connectSync(create) {
     try {
-      const cfg = Store.parseConfigInput($('#syncCfg').value);
       const em = $('#syncEmail').value.trim(), pw = $('#syncPass').value;
       if (!em || !pw) { toast('Enter the household email and password'); return; }
       toast('Connecting…');
-      const { localCount, cloudHas } = await Store.connect(cfg, em, pw, create);
+      const { localCount, cloudHas } = await Store.connect(em, pw, create);
       if (localCount > 0 && confirm(`Add the ${localCount} receipt${localCount === 1 ? '' : 's'} already on this phone to the shared budget?`)) {
         toast('Uploading…');
         await Store.uploadLocal(!cloudHas);
