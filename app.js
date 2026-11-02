@@ -222,6 +222,7 @@
   // ======================================================================
   function render(force) {
     if (state.tab === 'settings' && !force) return;
+    document.body.dataset.bg = state.tab === 'groceries' ? 'groceries' : 'dining';
     const view = $('#view');
     renderTabbar();
     if (state.tab === 'settings') { view.innerHTML = settingsHtml(); return; }

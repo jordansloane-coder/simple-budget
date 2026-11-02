@@ -25,21 +25,19 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+html { background: var(--bg); }
 html, body {
   margin: 0; padding: 0;
-  background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   overscroll-behavior-y: contain;
 }
-/* soft olive/linen glow in the corners, standing in for the photo background */
+/* per-category photo backgrounds (Dining Out is the default; Groceries swaps in its own) */
 body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(70% 34% at -5% -3%, rgba(125, 150, 90, 0.28), transparent 70%),
-    radial-gradient(55% 28% at 105% -2%, rgba(214, 194, 152, 0.5), transparent 72%),
-    linear-gradient(180deg, #f7f2e9 0%, #f1ebe0 100%);
+  background: url(img/bg-dining.jpg) center top / cover no-repeat, #f6efe5;
 }
+body[data-bg="groceries"]::before { background-image: url(img/bg-groceries.jpg); }
 body.noscroll { overflow: hidden; }
 
 #app {

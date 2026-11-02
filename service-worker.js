@@ -6,6 +6,7 @@ const CACHE_NAME = 'simple-budget-v1';
 const SHELL_FILES = [
   './', './index.html', './style.css', './app.js', './store.js', './claude.js',
   './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
+  './img/bg-dining.jpg', './img/bg-groceries.jpg',
 ];
 
 self.addEventListener('install', (event) => {
