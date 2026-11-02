@@ -27,6 +27,7 @@
     explain: {},            // `${catId}|${key}` -> text
     deviceName: lsGet('sb.name', ''),
     idx: null,
+    ring: { key: '', off: 0 },
   };
 
   // ======================================================================
@@ -51,6 +52,28 @@
     return `${DOW[d.getDay()]}, ${fmtShort(d)}${d.getFullYear() !== new Date().getFullYear() ? ', ' + d.getFullYear() : ''}`;
   }
   const fmtTimestamp = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+
+  // ======================================================================
+  // Icons + budget tone
+  // ======================================================================
+  const svg = (inner) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+  const ICON = {
+    dining: svg('<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'),
+    groceries: svg('<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>'),
+    calendar: svg('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+    settings: svg('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
+    camera: svg('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>'),
+    plus: svg('<path d="M12 5v14M5 12h14"/>'),
+    wallet: svg('<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>'),
+    chart: svg('<path d="M5 21v-6M12 21V3M19 21V9"/>'),
+    receipt: svg('<path d="M4 2v20l3-2 2.5 2L12 20l2.5 2L17 20l3 2V2l-3 2-2.5-2L12 4 9.5 2 7 4z"/><path d="M8 9h8M8 13h8"/>'),
+    basket: svg('<path d="m5 11 4-7M19 11l-4-7M2 11h20"/><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4"/><path d="M9 15v2M12 15v2M15 15v2"/>'),
+    cloche: svg('<path d="M3 18h18"/><path d="M5 18a7 7 0 0 1 14 0"/><path d="M12 8V6M10 5.5h4"/><path d="M12 2v1M5.6 4.6l.7.7M18.4 4.6l-.7.7"/>'),
+  };
+  const catIcon = (cat) => (cat && ICON[cat.id]) || (cat && cat.emoji ? `<span class="emo">${esc(cat.emoji)}</span>` : ICON.receipt);
+  // Green under 75% of the cap, amber from 75%, red at 100% or more.
+  const toneFor = (spent, cap) => (cap > 0 ? (spent >= cap ? 'bad' : spent / cap >= 0.75 ? 'warn' : '') : '');
 
   // ======================================================================
   // Budget cycles ("months" that start on the Nth)
@@ -207,16 +230,18 @@
     if (!cat) { state.tab = 'settings'; render(true); return; }
     state.tab = cat.id;
     view.innerHTML = categoryHtml(cat);
+    const ring = $('.ring-fill');
+    if (ring) requestAnimationFrame(() => requestAnimationFrame(() => { ring.style.strokeDashoffset = ring.dataset.target; }));
   }
 
   function renderTabbar() {
     const tabs = [
-      ...cats().map((c) => ({ id: c.id, ico: c.emoji || '🧾', label: c.name })),
-      { id: 'history', ico: '📅', label: 'History' },
-      { id: 'settings', ico: '⚙️', label: 'Settings' },
+      ...cats().map((c) => ({ id: c.id, ico: catIcon(c), label: c.name })),
+      { id: 'history', ico: ICON.calendar, label: 'History' },
+      { id: 'settings', ico: ICON.settings, label: 'Settings' },
     ];
     $('#tabbar').innerHTML = tabs.map((t) =>
-      `<button class="tab${t.id === state.tab ? ' active' : ''}" data-act="tab" data-id="${esc(t.id)}"><span class="tab-ico">${esc(t.ico)}</span>${esc(t.label)}</button>`
+      `<button class="tab${t.id === state.tab ? ' active' : ''}" data-act="tab" data-id="${esc(t.id)}"><span class="tab-ico">${t.ico}</span>${esc(t.label)}</button>`
     ).join('');
   }
 
@@ -224,21 +249,35 @@
     return state.viewKey ? cycleByKey(state.viewKey) : currentCycle();
   }
 
+  const RING_R = 96;
+  const RING_C = 2 * Math.PI * RING_R;
+
   function heroHtml(cat, cycle, rows) {
     const cur = currentCycle();
     const isCur = cycle.key === cur.key;
     const cap = capFor(cat, cycle.key);
     const spent = sum(rows);
     const left = cap - spent;
-    const pct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 0;
-    const cls = cap > 0 ? (spent > cap ? 'bad' : spent / cap >= 0.85 ? 'warn' : '') : '';
+    const ratio = cap > 0 ? spent / cap : 0;
+    const tone = toneFor(spent, cap);
     const earliest = allCycles().slice(-1)[0].key;
 
-    let big, sub, meta = '', pace = '';
+    // The ring animates from where it last was (or empty) to the real percentage.
+    const target = RING_C * (1 - Math.min(1, ratio));
+    const ringKey = `${cat.id}|${cycle.key}`;
+    const startOff = state.ring.key === ringKey ? state.ring.off : RING_C;
+    state.ring = { key: ringKey, off: target };
+
+    let big, sub, pill, tiles, pace = '';
     if (cap > 0) {
       big = money(Math.abs(left), true);
-      sub = left >= 0 ? (isCur ? 'left to spend' : 'under budget') : 'over budget';
-      meta = `<div class="hero-meta"><span>${money(spent)} spent</span><span>of ${money(cap, true)}</span></div>`;
+      sub = left >= 0 ? `${isCur ? 'left' : 'under'} of ${money(cap, true)}` : `over ${money(cap, true)}`;
+      pill = `<span class="pill ${tone}">${Math.round(ratio * 100)}% used</span>`;
+      tiles = [
+        ['', ICON.wallet, money(cap, true), 'Monthly Budget'],
+        ['mint', ICON.wallet, money(Math.abs(left), true), left >= 0 ? 'Remaining' : 'Over'],
+        ['', ICON.chart, `${Math.round(ratio * 100)}%`, 'Used'],
+      ];
       if (isCur) {
         const daysLeft = Math.max(1, Math.round((cycle.end - parseISO(todayISO())) / 864e5) + 1);
         pace = left > 0
@@ -248,7 +287,12 @@
     } else {
       big = money(spent, true);
       sub = 'spent this month';
-      pace = `<button class="link-btn" data-act="tab" data-id="settings">Set a monthly cap in Settings →</button>`;
+      pill = `<button class="pill" data-act="tab" data-id="settings">Set a budget →</button>`;
+      tiles = [
+        ['', ICON.wallet, 'Not set', 'Monthly Budget'],
+        ['mint', ICON.wallet, money(spent, true), 'Spent'],
+        ['', ICON.receipt, String(rows.length), 'Receipts'],
+      ];
     }
     return `
       <section class="hero">
@@ -257,20 +301,33 @@
           <div class="cycle-label">${esc(cycleLabel(cycle))}<small>${isCur ? 'This month' : 'Past month'}</small></div>
           <button class="nav-btn" data-act="next" ${isCur ? 'disabled' : ''} aria-label="Next month">›</button>
         </div>
-        <div class="hero-cat">${esc(cat.emoji)} ${esc(cat.name)}</div>
-        <div class="big-number ${left < 0 && cap > 0 ? 'over' : ''}">${big}</div>
-        <div class="big-sub">${sub}</div>
-        ${cap > 0 ? `<div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>` : ''}
-        ${meta}
+        <button class="cat-title" data-act="catpicker" aria-label="Switch category">${catIcon(cat)}<span>${esc(cat.name)}</span><span class="chev">⌄</span></button>
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 220 220" aria-hidden="true">
+            <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#37a06a"/><stop offset="1" stop-color="#0d5230"/></linearGradient></defs>
+            <circle class="ring-track" cx="110" cy="110" r="${RING_R}"/>
+            <circle class="ring-fill ${tone}" cx="110" cy="110" r="${RING_R}" style="stroke-dasharray:${RING_C};stroke-dashoffset:${startOff};${ratio > 0 ? '' : 'opacity:0'}" data-target="${target}"/>
+          </svg>
+          <div class="ring-center">
+            <div class="big-number ${tone === 'bad' ? 'over' : ''}">${big}</div>
+            <div class="ring-sub">${sub}</div>
+            <div class="ring-rule"></div>
+            ${pill}
+          </div>
+        </div>
+        <div class="stat-row">${tiles.map(([cls, ico, val, label]) => `<div class="stat ${cls}">${ico}<b>${val}</b><span>${label}</span></div>`).join('')}</div>
         ${pace ? `<div class="pace">${pace}</div>` : ''}
+        ${cap > 0 ? `<div class="pace">${cat.lineItems
+          ? `<button class="link-btn" data-act="mode" data-mode="items" data-cat="${esc(cat.id)}">${ICON.chart} View spending insights →</button>`
+          : `<button class="link-btn" data-act="tab" data-id="history">${ICON.calendar} View monthly history →</button>`}</div>` : ''}
       </section>`;
   }
 
   function rowHtml(e) {
-    const cat = catById(e.category) || { emoji: '🧾' };
+    const cat = catById(e.category) || {};
     const thumb = e.thumb
       ? `<img class="row-thumb" src="${e.thumb}" alt="">`
-      : `<div class="row-thumb">${esc(cat.emoji)}</div>`;
+      : `<div class="row-thumb">${catIcon(cat)}</div>`;
     const bits = [fmtDate(e.date)];
     if (e.items && e.items.length) bits.push(`${e.items.length} item${e.items.length === 1 ? '' : 's'}`);
     if (e.by) bits.push(esc(e.by));
@@ -291,13 +348,13 @@
     } else if (rows.length) {
       body = `<div class="section-title">${rows.length} receipt${rows.length === 1 ? '' : 's'}</div><ul class="list">${rows.map(rowHtml).join('')}</ul>`;
     } else {
-      body = `<div class="empty"><span class="emoji">${esc(cat.emoji)}</span>Nothing logged for ${esc(cat.name)} this month.<br>Tap Scan Receipt to add one.</div>`;
+      body = `<div class="empty-card">${cat.id === 'dining' ? ICON.cloche : cat.id === 'groceries' ? ICON.basket : catIcon(cat)}<h3>No ${esc(cat.name)} Expenses Yet</h3><p>Scan a receipt or add an expense to start tracking your ${esc(cat.name.toLowerCase())} spending.</p></div>`;
     }
     return `
       ${heroHtml(cat, cycle, rows)}
       <div class="actions">
-        <button class="btn primary" data-act="scan" data-cat="${esc(cat.id)}">📸 Scan Receipt</button>
-        <button class="btn" data-act="add" data-cat="${esc(cat.id)}">＋ Add</button>
+        <button class="btn primary" data-act="scan" data-cat="${esc(cat.id)}">${ICON.camera}Scan Receipt</button>
+        <button class="btn" data-act="add" data-cat="${esc(cat.id)}">${ICON.plus}Add Expense</button>
       </div>
       ${cat.lineItems ? `<div class="seg"><button class="${mode === 'receipts' ? 'active' : ''}" data-act="mode" data-mode="receipts" data-cat="${esc(cat.id)}">Receipts</button><button class="${mode === 'items' ? 'active' : ''}" data-act="mode" data-mode="items" data-cat="${esc(cat.id)}">What we bought</button></div>` : ''}
       ${body}`;
@@ -399,8 +456,8 @@ Biggest items this month: ${top}.`;
         const spent = sum(expensesIn(c.key, cat.id));
         const cap = capFor(cat, c.key);
         const pct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 0;
-        const cls = cap > 0 && spent > cap ? 'bad' : cap > 0 && spent / cap >= 0.85 ? 'warn' : '';
-        return `<div class="mini"><div class="mini-top"><span>${esc(cat.emoji)} ${esc(cat.name)}</span><span>${money(spent, true)}${cap > 0 ? ' / ' + money(cap, true) : ''}</span></div>${cap > 0 ? `<div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>` : ''}</div>`;
+        const cls = toneFor(spent, cap);
+        return `<div class="mini"><div class="mini-top"><span>${catIcon(cat)} ${esc(cat.name)}</span><span>${money(spent, true)}${cap > 0 ? ' / ' + money(cap, true) : ''}</span></div>${cap > 0 ? `<div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>` : ''}</div>`;
       }).join('');
       return `<li><button class="month-card" data-act="month" data-key="${c.key}">
         <div class="mc-head"><span>${esc(cycleLabel(c))}</span><span>${money(sum(rows), true)}</span></div>${minis}</button></li>`;
@@ -416,7 +473,7 @@ Biggest items this month: ${top}.`;
     const sums = catsFor(key).map((cat) => {
       const spent = sum(expensesIn(key, cat.id));
       const cap = capFor(cat, key);
-      return `<div class="item-line"><div class="nm">${esc(cat.emoji)} ${esc(cat.name)}${cap > 0 ? `<small>cap ${money(cap, true)} · ${cap - spent >= 0 ? money(cap - spent) + ' left' : money(spent - cap) + ' over'}</small>` : ''}</div><div class="pr">${money(spent)}</div></div>`;
+      return `<div class="item-line"><div class="nm">${catIcon(cat)} ${esc(cat.name)}${cap > 0 ? `<small>cap ${money(cap, true)} · ${cap - spent >= 0 ? money(cap - spent) + ' left' : money(spent - cap) + ' over'}</small>` : ''}</div><div class="pr">${money(spent)}</div></div>`;
     }).join('');
     const el = openSheet(`
       <div class="sheet-head"><h3>${esc(cycleLabel(cycle))}</h3><button class="x-btn" data-close>✕</button></div>
@@ -644,7 +701,7 @@ Biggest items this month: ${top}.`;
       q('#rSummary').innerHTML = reportCats.map((cat) => {
         const spent = sum(inc.filter((e) => e.category === cat.id));
         const cap = capFor(cat, key);
-        return `<div class="item-line"><div class="nm">${esc(cat.emoji)} ${esc(cat.name)}${cap > 0 ? `<small>cap ${money(cap, true)} · ${cap - spent >= 0 ? money(cap - spent) + ' left' : money(spent - cap) + ' over'}</small>` : ''}</div><div class="pr">${money(spent)}</div></div>`;
+        return `<div class="item-line"><div class="nm">${catIcon(cat)} ${esc(cat.name)}${cap > 0 ? `<small>cap ${money(cap, true)} · ${cap - spent >= 0 ? money(cap - spent) + ' left' : money(spent - cap) + ' over'}</small>` : ''}</div><div class="pr">${money(spent)}</div></div>`;
       }).join('') + `<div class="item-line"><div class="nm"><b>Total</b></div><div class="pr">${money(sum(inc))}</div></div>`;
     }
     summary();
@@ -948,7 +1005,13 @@ Biggest items this month: ${top}.`;
     const act = t.dataset.act;
     if (act.startsWith('s-')) { await handleSettingsAction(act, t); return; }
 
+    if (act === 'catpicker') {
+      const el = openSheet(`<div class="sheet-head"><h3>Category</h3><button class="x-btn" data-close>✕</button></div>
+        <div class="sheet-body" style="gap:0">${cats().map((c) => `<button class="pick-row${c.id === state.tab ? ' sel' : ''}" data-act="tab" data-id="${esc(c.id)}">${catIcon(c)}<span>${esc(c.name)}</span></button>`).join('')}</div>`);
+      return;
+    }
     if (act === 'tab') {
+      document.querySelectorAll('#modalRoot .overlay').forEach(closeSheet);
       state.tab = t.dataset.id; lsSet('sb.tab', state.tab);
       state.viewKey = null; state.group = ''; state.search = ''; state.showAll = false;
       render(true); window.scrollTo(0, 0);
