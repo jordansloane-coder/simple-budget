@@ -157,7 +157,7 @@
   // ======================================================================
   // Persistence helpers
   // ======================================================================
-  const BUILD = 'b6';
+  const BUILD = 'b7';
   function saveSettings() {
     state.settings.updatedAt = Date.now();
     const copy = JSON.parse(JSON.stringify(state.settings));
@@ -221,6 +221,26 @@
     lb.className = 'lightbox';
     lb.innerHTML = `<img src="${src}" alt="Receipt">`;
     lb.addEventListener('click', () => lb.remove());
+    document.body.appendChild(lb);
+  }
+
+  // Full-screen receipt viewer: tapping an expense with a photo lands here; Edit opens the form.
+  async function openReceipt(id) {
+    const e = state.expenses.find((x) => x.id === id);
+    if (!e) return;
+    if (!e.hasImage) { openForm({ id }); return; }
+    const d = await Store.get('images', id);
+    if (!d || !d.dataUrl) { openForm({ id }); return; }
+    const lb = document.createElement('div');
+    lb.className = 'lightbox rcpt';
+    lb.innerHTML = `<div class="lb-top"><div class="lb-cap"><b>${esc(e.vendor || 'Receipt')}</b> · ${esc(money(e.total))}<br><span>${esc(fmtDate(e.date))}</span></div><div class="lb-btns"><button data-lb="edit">Edit</button><button data-lb="close">Done</button></div></div><img src="${d.dataUrl}" alt="Receipt">`;
+    lb.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-lb]');
+      if (!b) return;
+      ev.stopPropagation();
+      lb.remove();
+      if (b.dataset.lb === 'edit') openForm({ id });
+    });
     document.body.appendChild(lb);
   }
 
@@ -494,7 +514,7 @@ Biggest items this month: ${top}.`;
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-sheet="report"]')) openReport(key);
       const open = e.target.closest('[data-act="open"]');
-      if (open) { e.stopPropagation(); openForm({ id: open.dataset.id }); }
+      if (open) { e.stopPropagation(); openReceipt(open.dataset.id); }
     });
   }
 
@@ -1044,7 +1064,7 @@ Biggest items this month: ${top}.`;
     } else if (act === 'add') {
       openForm({ catId: t.dataset.cat });
     } else if (act === 'open') {
-      openForm({ id: t.dataset.id });
+      openReceipt(t.dataset.id);
     } else if (act === 'mode') {
       state.mode[t.dataset.cat] = t.dataset.mode; state.group = ''; render(true);
     } else if (act === 'grp') {
