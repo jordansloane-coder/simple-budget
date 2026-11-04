@@ -157,7 +157,7 @@
   // ======================================================================
   // Persistence helpers
   // ======================================================================
-  const BUILD = 'b7';
+  const BUILD = 'b8';
   function saveSettings() {
     state.settings.updatedAt = Date.now();
     const copy = JSON.parse(JSON.stringify(state.settings));
@@ -224,16 +224,28 @@
     document.body.appendChild(lb);
   }
 
+  // A receipt can have several photos: the first lives at images/<id> (as before), the rest at images/<id>~1, ~2 …
+  const imgId = (eid, i) => (i ? `${eid}~${i}` : eid);
+  const imgCount = (e) => (e && e.hasImage ? (e.imageCount || 1) : 0);
+  async function loadPhotos(e) {
+    const out = [];
+    for (let i = 0; i < imgCount(e); i++) {
+      const d = await Store.get('images', imgId(e.id, i));
+      if (d && d.dataUrl) out.push(d.dataUrl);
+    }
+    return out;
+  }
+
   // Full-screen receipt viewer: tapping an expense with a photo lands here; Edit opens the form.
   async function openReceipt(id) {
     const e = state.expenses.find((x) => x.id === id);
     if (!e) return;
     if (!e.hasImage) { openForm({ id }); return; }
-    const d = await Store.get('images', id);
-    if (!d || !d.dataUrl) { openForm({ id }); return; }
+    const photos = await loadPhotos(e);
+    if (!photos.length) { openForm({ id }); return; }
     const lb = document.createElement('div');
     lb.className = 'lightbox rcpt';
-    lb.innerHTML = `<div class="lb-top"><div class="lb-cap"><b>${esc(e.vendor || 'Receipt')}</b> · ${esc(money(e.total))}<br><span>${esc(fmtDate(e.date))}</span></div><div class="lb-btns"><button data-lb="edit">Edit</button><button data-lb="close">Done</button></div></div><img src="${d.dataUrl}" alt="Receipt">`;
+    lb.innerHTML = `<div class="lb-top"><div class="lb-cap"><b>${esc(e.vendor || 'Receipt')}</b> · ${esc(money(e.total))}<br><span>${esc(fmtDate(e.date))}</span></div><div class="lb-btns"><button data-lb="edit">Edit</button><button data-lb="close">Done</button></div></div>${photos.map((u, i) => `<img src="${u}" alt="Receipt photo ${i + 1}">`).join('')}${photos.length > 1 ? `<div class="lb-count">${photos.length} photos — scroll for the rest</div>` : ''}`;
     lb.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-lb]');
       if (!b) return;
@@ -521,21 +533,22 @@ Biggest items this month: ${top}.`;
   // ======================================================================
   // Receipt form (add / edit / scan)
   // ======================================================================
-  function openForm({ catId, id, file }) {
+  function openForm({ catId, id, files }) {
     const existing = id ? state.expenses.find((e) => e.id === id) : null;
     const cat = catById(existing ? existing.category : catId);
     if (!cat) return;
     const ctx = {
-      image: null,
+      photos: [],   // { full, scan, thumb, orig } — orig = index it was saved at, or null if new
       items: existing && existing.items ? existing.items.map((i) => ({ ...i })) : [],
     };
 
     const el = openSheet(`
       <div class="sheet-head"><h3>${existing ? 'Edit' : 'New'} · ${esc(cat.name)}</h3><button class="x-btn" data-close>✕</button></div>
       <div class="sheet-body">
-        <div class="img-wrap" id="fImg" style="display:none"><img alt="Receipt"></div>
+        <div class="photo-strip" id="fImg" style="display:none"></div>
         <div class="status" id="fStatus" style="display:none"></div>
-        <button class="btn" id="fPhoto">📸 ${existing && existing.hasImage ? 'Replace photo' : 'Add photo &amp; read it'}</button>
+        <button class="btn" id="fPhoto">📸 Add photo &amp; read it</button>
+        <div class="hint" id="fPhotoHint" style="display:none">Long receipt or a few bags' worth? Add more photos and they're read together as one receipt.</div>
         <div><label class="field-label">Amount</label><div class="amount-wrap"><span>$</span><input id="fTotal" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="${existing ? esc(existing.total) : ''}"></div></div>
         <div><label class="field-label">Where</label><input id="fVendor" type="text" placeholder="Restaurant or store" value="${esc(existing ? existing.vendor : '')}"></div>
         <div class="row-2">
@@ -555,12 +568,20 @@ Biggest items this month: ${top}.`;
       s.className = 'status ' + (kind || '');
       s.textContent = msg || '';
     };
-    const showImage = (src) => {
-      q('#fImg').style.display = '';
-      const img = q('#fImg img');
-      img.src = src;
-      img.onclick = () => lightbox(src);
+    const renderPhotos = () => {
+      const n = ctx.photos.length;
+      const strip = q('#fImg');
+      strip.style.display = n ? '' : 'none';
+      strip.innerHTML = ctx.photos.map((ph, i) => `<div class="ph"><img src="${ph.full}" alt="Photo ${i + 1}" data-ph="${i}"><button class="x-btn" data-rmph="${i}" aria-label="Remove photo">✕</button><span>${i + 1}</span></div>`).join('');
+      q('#fPhoto').innerHTML = n ? '📸 Add another photo' : '📸 Add photo &amp; read it';
+      q('#fPhotoHint').style.display = n ? '' : 'none';
     };
+    q('#fImg').addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-rmph]');
+      if (rm) { ctx.photos.splice(Number(rm.dataset.rmph), 1); renderPhotos(); return; }
+      const im = e.target.closest('[data-ph]');
+      if (im) lightbox(ctx.photos[Number(im.dataset.ph)].full);
+    });
 
     function renderItems() {
       if (!cat.lineItems) return;
@@ -573,23 +594,31 @@ Biggest items this month: ${top}.`;
     renderItems();
 
     if (existing && existing.hasImage) {
-      Store.get('images', existing.id).then((d) => { if (d && d.dataUrl) showImage(d.dataUrl); });
+      loadPhotos(existing).then((list) => {
+        // keep any photo already added while these were loading
+        ctx.photos = list.map((full, i) => ({ full, scan: full, thumb: null, orig: i })).concat(ctx.photos);
+        renderPhotos();
+      });
     }
 
-    async function attachPhoto(f) {
+    async function attachPhoto(files) {
+      files = [].concat(files);
       try {
-        status('Preparing photo…', 'busy');
-        ctx.image = await prepareImage(f);
-        showImage(ctx.image.full);
+        status(files.length > 1 ? 'Preparing photos…' : 'Preparing photo…', 'busy');
+        for (const f of files) {
+          const im = await prepareImage(f);
+          ctx.photos.push({ full: im.full, scan: im.scan, thumb: im.thumb, orig: null });
+        }
+        renderPhotos();
         if (!state.settings.apiKey) { status('Add your Claude API key in Settings to read receipts automatically. You can type the details in for now.', 'warn'); return; }
-        status('Reading receipt…', 'busy');
-        const p = await Claude.parseReceipt(ctx.image.scan, state.settings.apiKey, cat, todayISO());
+        status(ctx.photos.length > 1 ? `Reading ${ctx.photos.length} photos…` : 'Reading receipt…', 'busy');
+        const p = await Claude.parseReceipt(ctx.photos.map((ph) => ph.scan), state.settings.apiKey, cat, todayISO());
         if (p.total != null) q('#fTotal').value = p.total;
         if (p.vendor) q('#fVendor').value = p.vendor;
         if (p.date) q('#fDate').value = p.date;
         if (p.address) q('#fAddress').value = p.address;
         if (cat.lineItems) { ctx.items = p.items; renderItems(); }
-        status('Got it — check the details, then Save.', 'ok');
+        status(ctx.photos.length > 1 ? `Read all ${ctx.photos.length} photos as one receipt — check the details, then Save.` : 'Got it — check the details, then Save.', 'ok');
       } catch (e) {
         status(e.message === 'NO_API_KEY' ? 'Add your Claude API key in Settings first.' : (e.message || 'Could not read that photo.') + ' You can fill it in by hand.', 'warn');
       }
@@ -634,15 +663,22 @@ Biggest items this month: ${top}.`;
         address: q('#fAddress').value.trim(),
         notes: q('#fNotes').value.trim(),
         items: cat.lineItems ? ctx.items.filter((i) => i.name.trim() || i.price).map((i) => ({ name: i.name.trim(), price: Number(i.price) || 0, group: i.group || 'Other' })) : [],
-        thumb: ctx.image ? ctx.image.thumb : (existing ? existing.thumb || null : null),
-        hasImage: !!ctx.image || !!(existing && existing.hasImage),
+        thumb: null,
+        hasImage: ctx.photos.length > 0,
+        imageCount: ctx.photos.length,
         by: existing ? existing.by || '' : state.deviceName,
         createdAt: existing ? existing.createdAt : Date.now(),
         updatedAt: Date.now(),
       };
+      const first = ctx.photos[0];
+      exp.thumb = !first ? null : first.thumb || (first.orig === 0 && existing ? existing.thumb || null : null) || await thumbOf(first.full);
       const { id: _drop, ...data } = exp;
       await Store.put('expenses', eid, JSON.parse(JSON.stringify(data)));
-      if (ctx.image) await Store.put('images', eid, { dataUrl: ctx.image.full });
+      // Write photos that are new or moved; drop the leftovers of any that were removed.
+      for (let i = 0; i < ctx.photos.length; i++) {
+        if (ctx.photos[i].orig !== i) await Store.put('images', imgId(eid, i), { dataUrl: ctx.photos[i].full });
+      }
+      for (let i = ctx.photos.length; i < imgCount(existing); i++) await Store.remove('images', imgId(eid, i));
       closeSheet(el);
       // Jump to the month this receipt landed in so it's visible straight away.
       if (state.tab === cat.id) {
@@ -656,13 +692,13 @@ Biggest items this month: ${top}.`;
       q('#fDelete').addEventListener('click', async () => {
         if (!confirm('Delete this receipt?')) return;
         await Store.remove('expenses', existing.id);
-        await Store.remove('images', existing.id);
+        for (let i = 0; i < Math.max(1, imgCount(existing)); i++) await Store.remove('images', imgId(existing.id, i));
         closeSheet(el);
         toast('Deleted');
       });
     }
 
-    if (file) attachPhoto(file);
+    if (files && files.length) attachPhoto(files);
   }
 
   // ======================================================================
@@ -674,8 +710,7 @@ Biggest items this month: ${top}.`;
     const url = URL.createObjectURL(file);
     try {
       const img = new Image();
-      img.src = url;
-      await img.decode();
+      await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('Could not open that photo.')); img.src = url; });
       return img;
     } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
   }
@@ -697,6 +732,14 @@ Biggest items this month: ${top}.`;
     let full = scaleTo(img, 1300, q);
     while (full.length > 850000 && q > 0.3) { q -= 0.1; full = scaleTo(img, 1300, q); }
     return { scan, full, thumb: scaleTo(img, 120, 0.6) };
+  }
+
+  async function thumbOf(dataUrl) {
+    try {
+      const img = new Image();
+      await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = dataUrl; });
+      return scaleTo(img, 120, 0.6);
+    } catch (e) { return null; }
   }
 
   // ======================================================================
@@ -780,8 +823,8 @@ Biggest items this month: ${top}.`;
     if (rs.photos) {
       for (const e of inc) {
         if (!e.hasImage) continue;
-        const d = await Store.get('images', e.id);
-        if (d && d.dataUrl) images[e.id] = d.dataUrl;
+        const list = await loadPhotos(e);
+        if (list.length) images[e.id] = list;
       }
     }
     const prepared = state.deviceName || '';
@@ -798,7 +841,7 @@ Biggest items this month: ${top}.`;
           <div class="pr-head"><span>${esc(e.vendor || 'Receipt')}</span><span>${money(e.total)}</span></div>
           <div class="pr-sub">${esc(fmtDate(e.date))}${e.address ? ' · ' + esc(e.address) : ''}${e.by ? ' · ' + esc(e.by) : ''}${e.notes ? '<br>' + esc(e.notes) : ''}</div>
           ${rs.items && e.items && e.items.length ? `<table>${e.items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.group)}</td><td class="r">${money(i.price)}</td></tr>`).join('')}</table>` : ''}
-          ${images[e.id] ? `<img src="${images[e.id]}" alt="Receipt">` : ''}
+          ${images[e.id] ? images[e.id].map((u) => `<img src="${u}" alt="Receipt">`).join('') : ''}
         </div>`).join('');
     }).join('');
     const root = $('#printRoot');
@@ -1059,7 +1102,7 @@ Biggest items this month: ${top}.`;
       render(true);
     } else if (act === 'scan') {
       const catId = t.dataset.cat;
-      photoCb = (f) => openForm({ catId, file: f });
+      photoCb = (fs) => openForm({ catId, files: fs });
       $('#photoInput').click();
     } else if (act === 'add') {
       openForm({ catId: t.dataset.cat });
@@ -1092,10 +1135,10 @@ Biggest items this month: ${top}.`;
   });
 
   $('#photoInput').addEventListener('change', (e) => {
-    const f = e.target.files && e.target.files[0];
+    const fs = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = '';
     const cb = photoCb; photoCb = null;
-    if (f && cb) cb(f);
+    if (fs.length && cb) cb(fs);
   });
 
   // Apply one settings field to state and persist it. Used on input (every keystroke/paste), change,

@@ -78,14 +78,22 @@ If a field truly cannot be determined from the image, use null (or an empty list
   return {
     GROUPS,
 
-    async parseReceipt(imageDataUrl, apiKey, category, todayIso) {
-      const { mediaType, base64 } = stripDataUrl(imageDataUrl);
+    // imageDataUrls: one data URL or an array. Several photos are treated as parts of ONE receipt.
+    async parseReceipt(imageDataUrls, apiKey, category, todayIso) {
+      const list = Array.isArray(imageDataUrls) ? imageDataUrls : [imageDataUrls];
+      const blocks = list.map((u) => {
+        const { mediaType, base64 } = stripDataUrl(u);
+        return { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } };
+      });
+      const many = list.length > 1
+        ? ` There are ${list.length} photos, in order. They are different parts of the SAME single receipt (for example a long receipt photographed in sections); the photos may overlap, so do not count an item twice if it appears at the edge of two photos. Combine them into one result, and use the final total shown on the receipt.`
+        : '';
       const { text, truncated } = await call(
         apiKey,
         receiptPrompt(category.name, !!category.lineItems),
         [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Read this receipt and return the JSON described. Today's date is ${todayIso}; use it to infer a missing year.` },
+          ...blocks,
+          { type: 'text', text: `Read this receipt and return the JSON described.${many} Today's date is ${todayIso}; use it to infer a missing year.` },
         ],
         category.lineItems ? 6000 : 600
       );
